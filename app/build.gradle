@@ -1,0 +1,101 @@
+apply plugin: 'com.android.application'
+apply plugin: 'android-apt'
+apply plugin: 'me.tatarka.retrolambda'
+
+ext {
+
+    //Project params
+    projectVersionCode = 1
+    projectVersionName = "1.0.0"
+    projectAppId = "com.grossum.routingtestapp"
+
+    minAndroidSdkVersion = 19
+    targetAndroidSdkVersion = 25
+
+    compilAndroidSdkVersion = 25
+    buildToolsAndroideVersion = "25.0.2"
+
+    //LIBRARIES
+    //Android
+    supportLibraryVersion = '25.3.1'
+
+    //Dependency and view injection
+    daggerVersion = '2.9'
+    daggerAnnotationVersion = '1.0'
+    butterknifeVersion = '8.8.1'
+
+    //RX
+    rxVersion = '2.0.1'
+    rxJava = '2.1.3'
+
+    //Java streams backport to Java6 (android)
+    streamBackportVersion = '1.1.7'
+
+    //Other
+    javatuplesVersion = '1.2'
+    multiDex = '1.0.1'
+    gsonVersion = '2.7'
+
+    //Testing
+    jUnitVersion = '4.12'
+    espressoVersion = '2.2.2'
+}
+
+android {
+    compileSdkVersion compilAndroidSdkVersion
+    buildToolsVersion buildToolsAndroideVersion
+    defaultConfig {
+        applicationId "com.grossum.routingtestapp"
+        minSdkVersion minAndroidSdkVersion
+        targetSdkVersion targetAndroidSdkVersion
+        versionCode projectVersionCode
+        versionName projectVersionName
+        multiDexEnabled true
+        testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}
+
+repositories {
+    flatDir {
+        dirs 'libs'
+    }
+}
+
+dependencies {
+    compile fileTree(dir: 'libs', include: ['*.jar'])
+    compile(name: 'HERE-sdk', ext: 'aar')
+    androidTestCompile("com.android.support.test.espresso:espresso-core:$espressoVersion", {
+        exclude group: 'com.android.support', module: 'support-annotations'
+    })
+    testCompile "junit:junit:$jUnitVersion"
+
+    compile "com.android.support:appcompat-v7:$supportLibraryVersion"
+    compile "com.android.support:design:$supportLibraryVersion"
+
+    apt "com.jakewharton:butterknife-compiler:$butterknifeVersion"
+    compile "com.jakewharton:butterknife:$butterknifeVersion"
+
+    compile "com.google.dagger:dagger:$daggerVersion"
+    apt "com.google.dagger:dagger-compiler:$daggerVersion"
+    provided "javax.annotation:jsr250-api:$daggerAnnotationVersion"
+
+    compile "io.reactivex.rxjava2:rxjava:$rxJava"
+    compile "io.reactivex.rxjava2:rxandroid:$rxVersion"
+
+    compile "com.annimon:stream:$streamBackportVersion"
+    compile "org.javatuples:javatuples:$javatuplesVersion"
+    compile "com.android.support:multidex:$multiDex"
+
+    compile "com.google.code.gson:gson:$gsonVersion"
+}

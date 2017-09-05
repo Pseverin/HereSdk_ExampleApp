@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingBottom="@dimen/common_padding_medium_8dp"
+        android:paddingLeft="@dimen/common_padding_xlarge_16dp"
+        android:paddingRight="@dimen/common_padding_xlarge_16dp"
+        android:paddingTop="@dimen/common_padding_medium_8dp">
+
+        <EditText
+            android:id="@+id/et_search"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:hint="Search.."
+            android:imeOptions="actionSearch"
+            android:inputType="text"/>
+    </LinearLayout>
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <fragment
+            android:id="@+id/mapfragment"
+            class="com.here.android.mpa.mapping.MapFragment"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"/>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_gravity="bottom">
+
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1">
+
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="bottom|right"
+                    android:orientation="horizontal">
+
+                    <FrameLayout
+                        android:id="@+id/btn_car"
+                        android:layout_width="@dimen/finger_size"
+                        android:layout_height="@dimen/finger_size"
+                        android:background="@android:color/white"
+                        android:padding="@dimen/common_padding_medium_8dp">
+
+                        <ImageView
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:src="@drawable/ic_car"/>
+                    </FrameLayout>
+
+                    <FrameLayout
+                        android:id="@+id/btn_truck"
+                        android:layout_width="@dimen/finger_size"
+                        android:layout_height="@dimen/finger_size"
+                        android:background="@android:color/white"
+                        android:padding="@dimen/common_padding_medium_8dp">
+
+                        <ImageView
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:src="@drawable/ic_truck"/>
+                    </FrameLayout>
+                </LinearLayout>
+
+                <FrameLayout
+                    android:id="@+id/btn_navigate"
+                    android:layout_width="@dimen/finger_size"
+                    android:layout_height="@dimen/finger_size"
+                    android:layout_gravity="bottom|left"
+                    android:background="@android:color/white"
+                    android:padding="@dimen/common_padding_large_12dp"
+                    android:visibility="gone">
+
+                    <ImageView
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:src="@drawable/ic_navigation"/>
+                </FrameLayout>
+            </FrameLayout>
+
+            <TextView
+                android:id="@+id/btn_add"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@color/colorPrimary"
+                android:gravity="center"
+                android:padding="@dimen/common_padding_large_12dp"
+                android:text="Add"
+                android:textColor="@android:color/white"
+                android:textSize="@dimen/text_medium_16sp"
+                android:visibility="gone"/>
+        </LinearLayout>
+    </FrameLayout>
+
+</LinearLayout>
