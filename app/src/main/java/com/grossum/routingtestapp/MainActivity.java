@@ -12,6 +12,7 @@ import android.util.Log;
 import android.view.View;
 import android.view.inputmethod.EditorInfo;
 import android.widget.EditText;
+import android.widget.Toast;
 
 import com.annimon.stream.Optional;
 import com.annimon.stream.Stream;
@@ -74,10 +75,10 @@ public class MainActivity extends AppCompatActivity {
     private MapRoute currentMapRoute;
     private Type type = Type.CAR;
     private boolean isNavigation;
-    private boolean paused;
     private NavigationManager navigationManager;
     private List<Point> routePoints = new ArrayList<>();
     private Point addPoint;
+    private boolean alreadyZoomed;
 
 
     public enum Type {
@@ -97,24 +98,9 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         ButterKnife.bind(this);
 
-        PermissionsUtils.requestAllPermissions(this);
 
         mapFragment = (MapFragment)
             getFragmentManager().findFragmentById(R.id.mapfragment);
-
-        mapFragment.init(error -> {
-            if (error == OnEngineInitListener.Error.NONE) {
-                posManager = PositioningManager.getInstance();
-                navigationManager = NavigationManager.getInstance();
-
-                mockRoute();
-                setupMapClickListener();
-                startPositioning();
-            } else {
-                Log.e(TAG, error.toString());
-            }
-        });
-
         etSearch.setOnEditorActionListener((v, actionId, event) -> {
             if (actionId == EditorInfo.IME_ACTION_SEARCH) {
                 String query = etSearch.getText().toString();
@@ -133,7 +119,30 @@ public class MainActivity extends AppCompatActivity {
             }
             return false;
         });
+        if (PermissionsUtils.requestAllPermissions(this)) {
+            initMap();
+        }
+
         updateAccordingToType();
+    }
+
+    private void initMap() {
+        final ProgressDialog dialog = new ProgressDialog(this);
+        dialog.setMessage(getString(R.string.please_wait_for_map));
+        dialog.show();
+        mapFragment.init(error -> {
+            dialog.dismiss();
+            if (error == OnEngineInitListener.Error.NONE) {
+                posManager = PositioningManager.getInstance();
+                navigationManager = NavigationManager.getInstance();
+
+                mockRoute();
+                setupMapClickListener();
+                startPositioning();
+            } else {
+                Toast.makeText(this, "Map initialization error -> " + error.toString(), Toast.LENGTH_LONG).show();
+            }
+        });
     }
 
     private void startPositioning() {
@@ -192,7 +201,7 @@ public class MainActivity extends AppCompatActivity {
                 Image img = new Image();
                 Bitmap bitmap;
 
-                int markerSize = getResources().getDimensionPixelSize(R.dimen.finger_size_half);
+                int markerSize = getResources().getDimensionPixelSize(R.dimen.common_padding_xxxlarge_32dp);
                 if (i == 0) {
                     bitmap = Bitmap.createScaledBitmap(BitmapFactory.decodeResource(getResources(), R.drawable.ic_start), markerSize, markerSize, false);
                 } else if (i == routePoints.size() - 1) {
@@ -224,6 +233,9 @@ public class MainActivity extends AppCompatActivity {
         RoutePlan routePlan = new RoutePlan();
         Stream.of(routePoints).forEach(point -> routePlan.addWaypoint(new RouteWaypoint(new GeoCoordinate(point.getGeoCoordinate()))));
 
+        Log.i(TAG, "routePoints = " + routePoints.size() + "\n" +
+            "routePlanSize = " + routePlan.getWaypointCount() + "\n");
+
         RouteOptions routeOptions = new RouteOptions();
         routeOptions.setTransportMode(type.transportMode);
         routeOptions.setRouteType(RouteOptions.Type.FASTEST);
@@ -239,11 +251,19 @@ public class MainActivity extends AppCompatActivity {
                 dialog.dismiss();
                 if (routingError == RoutingError.NONE) {
                     // Render the route on the map
+                    Log.i(TAG, "routePoints = " + routePoints.size() + "\n" +
+                        "routePlanSize = " + routePlan.getWaypointCount() + "\n");
+
+
                     currentMapRoute = new MapRoute(list.get(0).getRoute());
                     getMap().addMapObject(currentMapRoute);
 
                     btnNavigate.setVisibility(View.VISIBLE);
-                    zoomToRoute();
+
+                    if (!alreadyZoomed) {
+                        zoomToRoute();
+                        alreadyZoomed = true;
+                    }
                 } else {
                     // Display a message indicating route calculation failure
                 }
@@ -278,12 +298,14 @@ public class MainActivity extends AppCompatActivity {
                 if (type != Type.CAR) {
                     type = Type.CAR;
                     updateAccordingToType();
+                    buildRoute();
                 }
                 break;
             case R.id.btn_truck:
                 if (type != Type.TRUCK) {
                     type = Type.TRUCK;
                     updateAccordingToType();
+                    buildRoute();
                 }
                 break;
             case R.id.btn_navigate:
@@ -294,39 +316,37 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void updateNavigationState() {
-        btnNavigate.setBackgroundColor(isNavigation ? Color.GREEN : Color.WHITE);
+        myCurrentPosition.ifPresent(pos -> {
+            btnNavigate.setBackgroundColor(isNavigation ? Color.GREEN : Color.WHITE);
 
-        if (isNavigation) {
-            getMap().setMapScheme(Map.Scheme.TRUCKNAV_DAY);
+            if (isNavigation) {
+                getMap().setMapScheme(Map.Scheme.TRUCKNAV_DAY);
 
-            navigationManager.setMap(getMap());
+                navigationManager.setMap(getMap());
 
-            PositionSimulator positionSimulator = new PositionSimulator();
-            positionSimulator.startPlayback(FileManager.creteFakeGPSRoute(this));
-            posManager.setLogType(EnumSet.copyOf(new ArrayList<PositioningManager.LogType>() {{
-                add(PositioningManager.LogType.DATA_SOURCE);
-            }}));
+                PositionSimulator positionSimulator = new PositionSimulator();
+                positionSimulator.startPlayback(FileManager.creteFakeGPSRoute(this));
+                posManager.setLogType(EnumSet.copyOf(new ArrayList<PositioningManager.LogType>() {{
+                    add(PositioningManager.LogType.DATA_SOURCE);
+                }}));
 
-            NavigationManager.Error error = navigationManager.startNavigation(currentMapRoute.getRoute());
+                NavigationManager.Error error = navigationManager.startNavigation(currentMapRoute.getRoute());
 
-            myCurrentPosition.ifPresent(pos -> {
                 getMap().setCenter(pos, Map.Animation.LINEAR);
                 double maxZoom = getMap().getMaxZoomLevel();
                 double minZoom = getMap().getMinZoomLevel();
                 getMap().setZoomLevel((maxZoom + minZoom) * 5 / 6);
-            });
-        } else {
-            getMap().setMapScheme(Map.Scheme.NORMAL_DAY);
-            navigationManager.stop();
-            zoomToRoute();
-        }
+            } else {
+                getMap().setMapScheme(Map.Scheme.NORMAL_DAY);
+                navigationManager.stop();
+                zoomToRoute();
+            }
+        });
     }
 
     private void updateAccordingToType() {
         btnCar.setBackgroundColor(type == Type.CAR ? Color.GREEN : Color.WHITE);
         btnTruck.setBackgroundColor(type == Type.TRUCK ? Color.GREEN : Color.WHITE);
-
-        buildRoute();
     }
 
     private class GeocodeListener implements ResultListener<List<Location>> {
@@ -408,7 +428,6 @@ public class MainActivity extends AppCompatActivity {
 
     public void onResume() {
         super.onResume();
-        paused = false;
         if (posManager != null) {
             startPositioning();
         }
@@ -419,7 +438,6 @@ public class MainActivity extends AppCompatActivity {
             posManager.stop();
         }
         super.onPause();
-        paused = true;
     }
 
     public void onDestroy() {
@@ -439,34 +457,47 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        PermissionsUtils.onRequestPermissionsResult(this, requestCode, permissions, grantResults, true);
+        if (PermissionsUtils.onRequestPermissionsResult(this, requestCode, permissions, grantResults, true)) {
+            initMap();
+        }
     }
 
     private void mockRoute() {
         routePoints.add(new Point(new GeoCoordinate(39.845096189528704, -86.08396218158305)));
         routePoints.add(new Point(new GeoCoordinate(39.76037451066077, -86.08232527971268)));
         routePoints.add(new Point(new GeoCoordinate(39.75209872238338, -86.03698312304914)));
-        routePoints.add(new Point(new GeoCoordinate(39.71890814602375, -86.05102180503309)));
         routePoints.add(new Point(new GeoCoordinate(39.69421179033816, -86.14889376796782)));
         routePoints.add(new Point(new GeoCoordinate(39.69276222400367, -86.1526056099683)));
+
         routePoints.add(new Point(new GeoCoordinate(39.688103310763836, -86.15635592490435)));
         routePoints.add(new Point(new GeoCoordinate(39.40982638858259, -86.15521917119622)));
         routePoints.add(new Point(new GeoCoordinate(39.407930821180344, -85.994678651914)));
         routePoints.add(new Point(new GeoCoordinate(39.29768783971667, -85.96758104860783)));
-
         routePoints.add(new Point(new GeoCoordinate(38.958242973312736, -85.83722434937954)));
+
         routePoints.add(new Point(new GeoCoordinate(38.95695375278592, -85.83463777787983)));
         routePoints.add(new Point(new GeoCoordinate(38.80357917398214, -85.83979767747223)));
         routePoints.add(new Point(new GeoCoordinate(38.7192237842828, -85.78186162747443)));
         routePoints.add(new Point(new GeoCoordinate(38.617277881130576, -85.77563211321831)));
-        routePoints.add(new Point(new GeoCoordinate(38.54449354112148, -85.7678993884474)));
+        routePoints.add(new Point(new GeoCoordinate(38.530819304287434, -85.76520829461515)));
+
         routePoints.add(new Point(new GeoCoordinate(38.391432613134384, -85.75409632176161)));
         routePoints.add(new Point(new GeoCoordinate(38.37157890200615, -85.74640961363912)));
         routePoints.add(new Point(new GeoCoordinate(38.36343923583627, -85.75506719760597)));
-        routePoints.add(new Point(new GeoCoordinate(38.345896415412426, -85.74373905546963)));
-        routePoints.add(new Point(new GeoCoordinate(38.222097381949425, -85.48810643143952)));
+        routePoints.add(new Point(new GeoCoordinate(38.345616, -85.763900)));
+        routePoints.add(new Point(new GeoCoordinate(38.281897, -85.825662)));
 
         updateMapObjectsAndAddState();
         buildRoute();
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (addPoint != null) {
+            addPoint.setGeoCoordinate(null);
+            updateMapObjectsAndAddState();
+        } else {
+            super.onBackPressed();
+        }
     }
 }

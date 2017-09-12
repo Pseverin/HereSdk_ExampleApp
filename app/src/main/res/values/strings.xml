@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">RoutingTestApp</string>
+    <string name="please_wait_for_map">Please wait until the map is initialized...</string>
 </resources>
