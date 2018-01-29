@@ -16,26 +16,20 @@ import android.widget.Toast;
 
 import com.annimon.stream.Optional;
 import com.annimon.stream.Stream;
-import com.grossum.routingtestapp.utils.FileManager;
 import com.grossum.routingtestapp.utils.PermissionsUtils;
 import com.here.android.mpa.common.GeoCoordinate;
 import com.here.android.mpa.common.GeoPosition;
 import com.here.android.mpa.common.Image;
 import com.here.android.mpa.common.OnEngineInitListener;
-import com.here.android.mpa.common.PositionSimulator;
 import com.here.android.mpa.common.PositioningManager;
-import com.here.android.mpa.guidance.NavigationManager;
 import com.here.android.mpa.mapping.Map;
 import com.here.android.mpa.mapping.MapFragment;
 import com.here.android.mpa.mapping.MapMarker;
 import com.here.android.mpa.mapping.MapRoute;
-import com.here.android.mpa.routing.CoreRouter;
-import com.here.android.mpa.routing.Maneuver;
+import com.here.android.mpa.routing.RouteManager;
 import com.here.android.mpa.routing.RouteOptions;
 import com.here.android.mpa.routing.RoutePlan;
 import com.here.android.mpa.routing.RouteResult;
-import com.here.android.mpa.routing.RouteWaypoint;
-import com.here.android.mpa.routing.RoutingError;
 import com.here.android.mpa.search.ErrorCode;
 import com.here.android.mpa.search.GeocodeRequest;
 import com.here.android.mpa.search.Location;
@@ -43,7 +37,6 @@ import com.here.android.mpa.search.ResultListener;
 
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
-import java.util.EnumSet;
 import java.util.List;
 
 import butterknife.BindView;
@@ -69,20 +62,19 @@ public class MainActivity extends AppCompatActivity {
     public final static String TAG = "TAG -> ";
     public PositioningManager posManager;
 
-
     private Optional<GeoCoordinate> myCurrentPosition = Optional.empty();
     private MapFragment mapFragment;
     private MapRoute currentMapRoute;
     private Type type = Type.CAR;
     private boolean isNavigation;
-    private NavigationManager navigationManager;
+    private RouteManager navigationManager;
     private List<Point> routePoints = new ArrayList<>();
     private Point addPoint;
     private boolean alreadyZoomed;
 
 
     public enum Type {
-        CAR(RouteOptions.TransportMode.CAR), TRUCK(RouteOptions.TransportMode.TRUCK);
+        CAR(RouteOptions.TransportMode.CAR), TRUCK(RouteOptions.TransportMode.CAR/*for starter mode*/);
 
         public RouteOptions.TransportMode transportMode;
 
@@ -134,7 +126,7 @@ public class MainActivity extends AppCompatActivity {
             dialog.dismiss();
             if (error == OnEngineInitListener.Error.NONE) {
                 posManager = PositioningManager.getInstance();
-                navigationManager = NavigationManager.getInstance();
+                navigationManager = new RouteManager();
 
                 mockRoute();
                 setupMapClickListener();
@@ -151,7 +143,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void setupMapClickListener() {
-        mapFragment.getMapGesture().addOnGestureListener(new OnMapClickListener(getMap()) {
+        mapFragment.getMapGesture().addOnGestureListener(new OnMapClickListener(mapFragment.getMap()) {
             @Override
             public void onMapClick(PointF pointF, GeoCoordinate geoCoordinate) {
                 if (addPoint == null) {
@@ -162,21 +154,26 @@ public class MainActivity extends AppCompatActivity {
 
                 updateMapObjectsAndAddState();
             }
-        }, Integer.MAX_VALUE, true);
+        });
 
         posManager.addListener(
             new WeakReference<>(positionListener));
-        mapFragment.getPositionIndicator().setVisible(true);
+        mapFragment.getMap().getPositionIndicator().setVisible(true);
 
         mapFragment.setMapMarkerDragListener(onDragListener);
-        navigationManager.addNewInstructionEventListener(new WeakReference<>(newInstructionEventListener));
+        //navigationManager.addNewInstructionEventListener(new WeakReference<>(newInstructionEventListener));
         getMap().addSchemeChangedListener(onSchemeChangedListener);
     }
 
     private void updateMapObjectsAndAddState() {
+        if (getMap() == null) {
+            return;
+        }
         runOnUiThread(() -> {
             Stream.of(routePoints).forEach(point -> {
-                getMap().removeMapObject(point.getMarker());
+                if (point.getMarker() != null) {
+                    getMap().removeMapObject(point.getMarker());
+                }
                 point.setMarker(null);
             });
 
@@ -229,9 +226,8 @@ public class MainActivity extends AppCompatActivity {
             getMap().removeMapObject(currentMapRoute);
         }
 
-        CoreRouter router = new CoreRouter();
         RoutePlan routePlan = new RoutePlan();
-        Stream.of(routePoints).forEach(point -> routePlan.addWaypoint(new RouteWaypoint(new GeoCoordinate(point.getGeoCoordinate()))));
+        Stream.of(routePoints).forEach(point -> routePlan.addWaypoint(new GeoCoordinate(point.getGeoCoordinate())));
 
         Log.i(TAG, "routePoints = " + routePoints.size() + "\n" +
             "routePlanSize = " + routePlan.getWaypointCount() + "\n");
@@ -245,11 +241,17 @@ public class MainActivity extends AppCompatActivity {
         final ProgressDialog dialog = new ProgressDialog(this);
         dialog.setIndeterminate(true);
         dialog.show();
-        router.calculateRoute(routePlan, new CoreRouter.Listener() {
+
+        navigationManager.calculateRoute(routePlan, new RouteManager.Listener() {
             @Override
-            public void onCalculateRouteFinished(List<RouteResult> list, RoutingError routingError) {
+            public void onProgress(int i) {
+                dialog.setMessage("Progress... " + i + "%");
+            }
+
+            @Override
+            public void onCalculateRouteFinished(RouteManager.Error error, List<RouteResult> list) {
                 dialog.dismiss();
-                if (routingError == RoutingError.NONE) {
+                if (error == RouteManager.Error.NONE) {
                     // Render the route on the map
                     Log.i(TAG, "routePoints = " + routePoints.size() + "\n" +
                         "routePlanSize = " + routePlan.getWaypointCount() + "\n");
@@ -268,13 +270,7 @@ public class MainActivity extends AppCompatActivity {
                     // Display a message indicating route calculation failure
                 }
             }
-
-            @Override
-            public void onProgress(int i) {
-                dialog.setMessage("Progress... " + i + "%");
-            }
         });
-
     }
 
     private void zoomToRoute() {
@@ -316,7 +312,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void updateNavigationState() {
-        myCurrentPosition.ifPresent(pos -> {
+        /*myCurrentPosition.ifPresent(pos -> {
             btnNavigate.setBackgroundColor(isNavigation ? Color.GREEN : Color.WHITE);
 
             if (isNavigation) {
@@ -341,7 +337,7 @@ public class MainActivity extends AppCompatActivity {
                 navigationManager.stop();
                 zoomToRoute();
             }
-        });
+        });*/
     }
 
     private void updateAccordingToType() {
@@ -382,7 +378,7 @@ public class MainActivity extends AppCompatActivity {
         Log.i(TAG, "Map scheme changed to " + mapScheme);
     };
 
-    NavigationManager.NewInstructionEventListener newInstructionEventListener = new NavigationManager.NewInstructionEventListener() {
+    /*NavigationManager.NewInstructionEventListener newInstructionEventListener = new NavigationManager.NewInstructionEventListener() {
         @Override
         public void onNewInstructionEvent() {
             super.onNewInstructionEvent();
@@ -397,7 +393,7 @@ public class MainActivity extends AppCompatActivity {
                 //display maneuver.getDistanceToNextManeuver()
             }
         }
-    };
+    };*/
 
 
     MapMarker.OnDragListener onDragListener = new MapMarker.OnDragListener() {
